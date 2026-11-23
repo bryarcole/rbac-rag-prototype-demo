@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.deepeval/
+
+# Node / Playwright / Promptfoo
+node_modules/
+playwright/node_modules/
+playwright/playwright-report/
+playwright/test-results/
+reports/
+promptfoo-results.json
+
+# Local runtime artifacts
+audit_logs.jsonl
+.env
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/

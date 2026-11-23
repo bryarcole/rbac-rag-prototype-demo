@@ -1,0 +1,92 @@
+name: AI Quality, Security & E2E Gate
+on: [push, pull_request]
+
+jobs:
+  # -------------------------------------------------------------------------
+  # JOB 1: Pytest + DeepEval Quality Gate (Fails if Faithfulness < 0.85)
+  # -------------------------------------------------------------------------
+  deepeval-and-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run RBAC Unit Tests & DeepEval RAG Metrics
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FAITHFULNESS_THRESHOLD: "0.85"
+          DEEPEVAL_LIMIT: "10"
+        run: |
+          mkdir -p reports
+          pytest -v tests/test_rbac_unit.py tests/test_deepeval.py             --html=reports/deepeval-report.html --self-contained-html
+      - name: Upload DeepEval HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepeval-html-report
+          path: reports/deepeval-report.html
+
+  # -------------------------------------------------------------------------
+  # JOB 2: Promptfoo Red-Team & A/B Model Comparison
+  # -------------------------------------------------------------------------
+  promptfoo-redteam:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install -r requirements.txt
+      - name: Run Promptfoo Red-Team & A/B Eval
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+        run: |
+          mkdir -p reports
+          npx --yes promptfoo@latest eval --no-cache --output reports/promptfoo-report.html
+      - name: Upload Promptfoo HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: promptfoo-html-report
+          path: reports/promptfoo-report.html
+
+  # -------------------------------------------------------------------------
+  # JOB 3: Playwright UI (Mocked) + API Contract + Live Smoke Tests
+  # -------------------------------------------------------------------------
+  playwright-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install -r requirements.txt
+      - name: Install Playwright & Chromium
+        working-directory: playwright
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+      - name: Boot FastAPI (Mock Mode) & Run Deterministic UI + API Tests
+        run: |
+          SKIP_INDEXING=1 uvicorn rag_app:app --host 127.0.0.1 --port 8000 &
+          sleep 3
+          cd playwright && npm run test:mocked
+      - name: Upload Playwright HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-html-report
+          path: playwright/playwright-report/

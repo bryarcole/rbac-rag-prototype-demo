@@ -1,0 +1,16 @@
+{
+  "name": "rbac-rag-playwright-tests",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:mocked": "playwright test tests/ui-mocked.spec.ts tests/api-schema.spec.ts",
+    "test:smoke": "RUN_LIVE_SMOKE=1 playwright test tests/live-smoke.spec.ts",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

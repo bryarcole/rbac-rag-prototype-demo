@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Permission-Aware Enterprise RAG</title>
+  <style>
+    :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --danger: #ef4444; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); max-width: 820px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { margin-bottom: 0.25rem; }
+    .subtitle { color: var(--muted); margin-bottom: 1.5rem; }
+    .controls { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    select, input, button { padding: 0.65rem 0.9rem; border-radius: 6px; border: 1px solid #334155; background: var(--card); color: var(--text); font-size: 0.95rem; }
+    input { flex: 1; min-width: 240px; }
+    button { background: var(--accent); color: #0f172a; font-weight: 600; cursor: pointer; border: none; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error-banner { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: #fecaca; padding: 0.85rem; border-radius: 6px; margin-bottom: 1rem; display: none; }
+    .chat-card { background: var(--card); border: 1px solid #334155; border-radius: 8px; padding: 1.25rem; margin-top: 1rem; display: none; }
+    .meta { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
+    .citations { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+    .citation-btn { background: #0ea5e9; color: #0f172a; font-size: 0.85rem; padding: 0.4rem 0.7rem; border-radius: 999px; border: none; cursor: pointer; }
+    .citation-drawer { margin-top: 1rem; padding: 1rem; background: #0b1220; border-left: 3px solid var(--accent); border-radius: 4px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>Permission-Aware Enterprise RAG</h1>
+  <p class="subtitle">Minimal test harness UI — pre-retrieval RBAC filtering, citations, and latency/cost telemetry.</p>
+
+  <form id="query-form" class="controls">
+    <select id="role-select" data-testid="role-select" aria-label="User Role">
+      <option value="employee">employee</option>
+      <option value="engineering" selected>engineering</option>
+      <option value="hr">hr</option>
+      <option value="executive">executive</option>
+    </select>
+    <input id="question-input" data-testid="question-input" type="text" placeholder="Ask a company policy question..." required />
+    <button id="submit-btn" data-testid="submit-btn" type="submit">Ask</button>
+  </form>
+
+  <div id="error-banner" data-testid="error-banner" class="error-banner" role="alert"></div>
+
+  <div id="chat-card" data-testid="chat-response" class="chat-card">
+    <div id="response-meta" data-testid="response-meta" class="meta"></div>
+    <div id="answer-text" data-testid="answer-text"></div>
+    <div id="citations-list" data-testid="citations-list" class="citations"></div>
+    <div id="citation-drawer" data-testid="citation-drawer" class="citation-drawer">
+      <strong id="drawer-title" data-testid="drawer-title"></strong>
+      <p id="drawer-snippet" data-testid="drawer-snippet"></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("query-form");
+    const roleSelect = document.getElementById("role-select");
+    const questionInput = document.getElementById("question-input");
+    const submitBtn = document.getElementById("submit-btn");
+    const errorBanner = document.getElementById("error-banner");
+    const chatCard = document.getElementById("chat-card");
+    const responseMeta = document.getElementById("response-meta");
+    const answerText = document.getElementById("answer-text");
+    const citationsList = document.getElementById("citations-list");
+    const citationDrawer = document.getElementById("citation-drawer");
+    const drawerTitle = document.getElementById("drawer-title");
+    const drawerSnippet = document.getElementById("drawer-snippet");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBanner.style.display = "none";
+      citationDrawer.style.display = "none";
+      submitBtn.disabled = true;
+
+      try {
+        const res = await fetch("/query", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Role": roleSelect.value,
+          },
+          body: JSON.stringify({ question: questionInput.value }),
+        });
+
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({ detail: "Unexpected server error" }));
+          throw new Error(`Request failed (${res.status}): ${errBody.detail || res.statusText}`);
+        }
+
+        const data = await res.json();
+        chatCard.style.display = "block";
+        responseMeta.textContent = `Role: ${data.user_role} | Status: ${data.status} | Latency: ${data.latency_ms}ms | Cost: $${data.estimated_cost_usd.toFixed(6)}`;
+        answerText.textContent = data.answer;
+
+        citationsList.innerHTML = "";
+        (data.citations || []).forEach((cit) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "citation-btn";
+          btn.setAttribute("data-testid", `citation-btn-${cit.doc_id}`);
+          btn.textContent = `${cit.doc_id} (${cit.similarity_score})`;
+          btn.addEventListener("click", () => {
+            drawerTitle.textContent = `${cit.doc_id} — ${cit.title}`;
+            drawerSnippet.textContent = cit.snippet;
+            citationDrawer.style.display = "block";
+          });
+          citationsList.appendChild(btn);
+        });
+      } catch (err) {
+        chatCard.style.display = "none";
+        errorBanner.textContent = err.message || "Unable to reach the AI service. Please try again.";
+        errorBanner.style.display = "block";
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
