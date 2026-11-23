@@ -28,8 +28,8 @@ pip install -r requirements.txt
 ```bash
 # With real Bedrock indexing (requires AWS credentials):
 export AWS_REGION=us-east-2
-export AWS_ACCESS_KEY_ID=AKIAUU4ZMF4LNOHLOU7E
-export AWS_SECRET_ACCESS_KEY=y7jl3BCK4kVkcpM9kMGgAphWspIUkqQ1IFrGw4Mti
+export AWS_ACCESS_KEY_ID=your_key
+export AWS_SECRET_ACCESS_KEY=your_secret
 uvicorn rag_app:app --reload --port 8000
 
 # OR for testing without AWS:
