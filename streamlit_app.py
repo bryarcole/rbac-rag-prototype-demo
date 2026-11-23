@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from rag_app import SEED_DOCUMENTS, index_seed_documents
 from workflow import run_enterprise_workflow
@@ -7,7 +8,8 @@ st.set_page_config(page_title="Permission-Aware Enterprise RAG", page_icon="🛡
 
 @st.cache_resource(show_spinner="Indexing enterprise documents with Amazon Bedrock...")
 def init_knowledge_base():
-    index_seed_documents()
+    if os.getenv("SKIP_INDEXING") != "1":
+        index_seed_documents()
     return True
 
 

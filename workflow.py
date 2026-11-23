@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from datetime import datetime, timezone
 from typing import List, Literal, Optional
@@ -34,6 +35,12 @@ class WorkflowAuditRecord(BaseModel):
 
 def triage_query(question: str, model_id: Optional[str] = None) -> TriageResult:
     """Catches prompt injections and off-topic chatter before vector retrieval."""
+    # Mock mode: skip AWS when testing
+    if os.getenv("SKIP_INDEXING") == "1":
+        if any(phrase in question.lower() for phrase in ["ignore", "override", "ceo", "reveal", "secret"]):
+            return TriageResult(intent="prompt_injection", reasoning="Mock: Detected injection keywords")
+        return TriageResult(intent="knowledge_query", reasoning="Mock mode: Assuming valid workplace query")
+
     system_prompt = (
         "You are a security triage router for an enterprise AI assistant. "
         "Classify the user's input into ONE of three intents:\n"
