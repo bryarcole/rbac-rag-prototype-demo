@@ -6,7 +6,7 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel
 
 from llm_provider import get_provider
-from rag_app import generate_grounded_answer_with_usage, search_authorized_docs
+from rag_core import generate_grounded_answer_with_usage, search_authorized_docs
 
 
 class TriageResult(BaseModel):
