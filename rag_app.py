@@ -28,7 +28,17 @@ SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.35"))
 INPUT_COST_PER_1M = float(os.getenv("INPUT_COST_PER_1M", "0.30"))
 OUTPUT_COST_PER_1M = float(os.getenv("OUTPUT_COST_PER_1M", "2.50"))
 
-bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+# Auto-detect AWS credentials and fall back to mock mode if unavailable (e.g., Streamlit Cloud)
+try:
+    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    # Verify credentials work by checking caller identity
+    sts = boto3.client("sts", region_name=AWS_REGION)
+    sts.get_caller_identity()
+except Exception:
+    # No credentials available - set SKIP_INDEXING for mock mode
+    os.environ["SKIP_INDEXING"] = "1"
+    bedrock = None
+    logger.info("AWS credentials not available. Running in mock mode (SKIP_INDEXING=1)")
 app = FastAPI(title="Permission-Aware Enterprise RAG", version="2.0.0")
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -139,6 +149,12 @@ VECTOR_STORE: List[Document] = []
 # ---------------------------------------------------------------------------
 def get_embedding(text: str) -> List[float]:
     """Calls Amazon Titan Text Embeddings V2 to return a 1024-dim normalized vector."""
+    if bedrock is None or os.getenv("SKIP_INDEXING") == "1":
+        # Mock embedding for testing
+        import hashlib
+        hash_val = hashlib.md5(text.encode()).digest()
+        return [float(b) / 128.0 for b in hash_val] + [0.0] * (1024 - len(hash_val))
+
     payload = json.dumps({
         "inputText": text,
         "dimensions": 1024,
@@ -178,6 +194,11 @@ def generate_grounded_answer_with_usage(
     )
 
     user_message = f"Context:\n{context_str}\n\nQuestion: {question}"
+
+    # Mock mode: return simple response
+    if bedrock is None or os.getenv("SKIP_INDEXING") == "1":
+        answer = "I do not have enough authorized information to answer that question. (Mock mode - documents not indexed)"
+        return answer, 0, 0, 0.0
 
     response = bedrock.converse(
         modelId=model_id or CHAT_MODEL_ID,
