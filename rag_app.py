@@ -218,13 +218,20 @@ def search_authorized_docs(query: str, user_role: str, top_k: int) -> List[tuple
     Filter by `user_role` BEFORE computing vector similarity.
     In mock mode, returns all authorized documents (no similarity threshold).
     """
+    logger.info(f"Search: query='{query}', role='{user_role}', VECTOR_STORE size={len(VECTOR_STORE)}")
+
     authorized_pool = [doc for doc in VECTOR_STORE if user_role in doc.allowed_roles]
+    logger.info(f"Authorized docs for {user_role}: {len(authorized_pool)} found")
+
     if not authorized_pool:
+        logger.info(f"No authorized docs found for {user_role}")
         return []
 
     # Mock mode: return all authorized documents for demo
     if os.getenv("SKIP_INDEXING") == "1":
-        return [(doc, 1.0) for doc in authorized_pool[:top_k]]
+        result = [(doc, 1.0) for doc in authorized_pool[:top_k]]
+        logger.info(f"Mock mode: returning {len(result)} documents")
+        return result
 
     query_vec = np.array(get_embedding(query))
 
