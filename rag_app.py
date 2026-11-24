@@ -178,9 +178,18 @@ def generate_grounded_answer_with_usage(
         "Never guess or use outside knowledge."
     )
 
-    # Mock mode: return simple response
-    if llm is None or os.getenv("SKIP_INDEXING") == "1":
-        answer = "I do not have enough authorized information to answer that question. (Mock mode - documents not indexed)"
+    # Mock mode: generate mock answer from context
+    if os.getenv("SKIP_INDEXING") == "1":
+        if not context_blocks:
+            answer = "I do not have enough authorized information to answer that question."
+        else:
+            # Use first context block as mock answer
+            answer = f"Based on {retrieved_docs[0][0].doc_id}: {retrieved_docs[0][0].content[:200]}..."
+        return answer, 0, 0, 0.0
+
+    # Real mode: use LLM provider
+    if llm is None:
+        answer = "I do not have enough authorized information to answer that question."
         return answer, 0, 0, 0.0
 
     answer, input_tokens, output_tokens, cost_usd = llm.generate_answer(
@@ -236,16 +245,17 @@ def search_authorized_docs(query: str, user_role: str, top_k: int) -> List[tuple
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 def index_seed_documents():
-    """Embeds the 5 seed documents once when the server boots (skips if SKIP_INDEXING=1)."""
-    if os.getenv("SKIP_INDEXING") == "1":
-        logger.info("SKIP_INDEXING=1 set; skipping Bedrock startup indexing (mock/UI test mode).")
-        return
+    """Embeds the 5 seed documents once when the server boots."""
     logger.info("Indexing %d enterprise documents into vector store...", len(SEED_DOCUMENTS))
     VECTOR_STORE.clear()
     for doc in SEED_DOCUMENTS:
         doc.embedding = get_embedding(f"{doc.title}\n{doc.content}")
         VECTOR_STORE.append(doc)
-    logger.info("Indexing complete.")
+
+    if os.getenv("SKIP_INDEXING") == "1":
+        logger.info("✅ Mock mode: %d documents pre-indexed for demo", len(VECTOR_STORE))
+    else:
+        logger.info("✅ Indexing complete with %s provider", LLM_PROVIDER)
 
 
 @app.get("/", include_in_schema=False)
