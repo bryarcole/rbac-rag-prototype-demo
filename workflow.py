@@ -5,12 +5,8 @@ from datetime import datetime, timezone
 from typing import List, Literal, Optional
 from pydantic import BaseModel
 
-from rag_app import (
-    CHAT_MODEL_ID,
-    bedrock,
-    generate_grounded_answer_with_usage,
-    search_authorized_docs,
-)
+from llm_provider import get_provider
+from rag_app import generate_grounded_answer_with_usage, search_authorized_docs
 
 
 class TriageResult(BaseModel):
@@ -41,6 +37,8 @@ def triage_query(question: str, model_id: Optional[str] = None) -> TriageResult:
             return TriageResult(intent="prompt_injection", reasoning="Mock: Detected injection keywords")
         return TriageResult(intent="knowledge_query", reasoning="Mock mode: Assuming valid workplace query")
 
+    llm = get_provider()
+
     system_prompt = (
         "You are a security triage router for an enterprise AI assistant. "
         "Classify the user's input into ONE of three intents:\n"
@@ -51,13 +49,13 @@ def triage_query(question: str, model_id: Optional[str] = None) -> TriageResult:
         "Respond ONLY with valid JSON: {\"intent\": \"...\", \"reasoning\": \"...\"}"
     )
 
-    response = bedrock.converse(
-        modelId=model_id or CHAT_MODEL_ID,
-        system=[{"text": system_prompt}],
-        messages=[{"role": "user", "content": [{"text": question}]}],
-        inferenceConfig={"temperature": 0.0, "maxTokens": 120},
+    answer, _, _, _ = llm.generate_answer(
+        question=question,
+        context="",
+        system_prompt=system_prompt,
     )
-    raw = response["output"]["message"]["content"][0]["text"].strip()
+
+    raw = answer.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1].replace("json", "", 1).strip()
 
