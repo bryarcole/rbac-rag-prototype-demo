@@ -200,7 +200,7 @@ SCENARIOS = [
     ("How much notice do we need before deprecating a customer-facing feature?", "engineering", "DOC-ENG-24"),
     ("Which major SDK versions do we support and who publishes to npm and PyPI?", "engineering", "DOC-ENG-25"),
     ("How do I request a new internal tool or dashboard from the Platform Intake team?", "employee", "DOC-ENG-26"),
-    ("What is the response time for a SEV-2 versus a SEV-3 incident?", "engineering", "DOC-ENG-27"),
+    ("How fast must we respond to a SEV-2 and how is a SEV-3 handled?", "engineering", "DOC-ENG-27"),
     ("What sections are in the blameless post-mortem template and when are action items due?", "engineering", "DOC-ENG-28"),
     ("How long does the primary on-call have to acknowledge a page before escalating to the secondary?", "engineering", "DOC-ENG-29"),
     ("How often are repository permissions reviewed and how many admins are allowed per repo?", "engineering", "DOC-ENG-30"),

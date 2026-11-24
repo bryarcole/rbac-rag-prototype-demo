@@ -335,7 +335,7 @@ SCENARIOS = [
     ("How do I order a headset or webcam from the Peripheral Catalog?", "employee", "DOC-IT-23"),
     ("How do I set up RingCentral call forwarding and voicemail?", "employee", "DOC-IT-24"),
     ("How does the insider threat program score alerts and who reviews them?", "executive", "DOC-IT-25"),
-    ("Who needs to approve a $7,500 purchase?", "employee", "DOC-PROC-01"),
+    ("What are the purchase approval thresholds and who signs off above $10,000?", "employee", "DOC-PROC-01"),
     ("What documents does a new supplier need to submit in the Coupa Supplier Portal?", "engineering", "DOC-PROC-02"),
     ("How does the RFP scoring rubric work for purchases over $100K?", "engineering", "DOC-PROC-03"),
     ("How do I book the Redwood boardroom and what happens if I do not check in?", "employee", "DOC-PROC-04"),
@@ -359,5 +359,5 @@ SCENARIOS = [
     ("What score does a SaaS vendor need on the SIG Lite security questionnaire?", "engineering", "DOC-PROC-22"),
     ("Do I need to report a vendor gift worth more than $75?", "hr", "DOC-PROC-23"),
     ("How are assets over $2,500 tagged and certified each quarter?", "engineering", "DOC-PROC-24"),
-    ("I tripped and got hurt at the office, how do I report the injury?", "employee", "DOC-PROC-25"),
+    ("How do I report a workplace injury and where are the first aid kits?", "employee", "DOC-PROC-25"),
 ]

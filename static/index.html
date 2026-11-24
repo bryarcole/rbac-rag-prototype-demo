@@ -20,6 +20,14 @@
     .citations { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
     .citation-btn { background: #0ea5e9; color: #0f172a; font-size: 0.85rem; padding: 0.4rem 0.7rem; border-radius: 999px; border: none; cursor: pointer; }
     .citation-drawer { margin-top: 1rem; padding: 1rem; background: #0b1220; border-left: 3px solid var(--accent); border-radius: 4px; display: none; }
+    .samples { margin-bottom: 1rem; display: none; }
+    .samples h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+    .sample-group { margin-bottom: 0.6rem; }
+    .sample-group-title { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .sample-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .sample-chip { background: var(--card); color: var(--text); border: 1px solid #334155; font-weight: 400; font-size: 0.82rem; padding: 0.35rem 0.7rem; border-radius: 999px; }
+    .sample-chip:hover { border-color: var(--accent); }
+    .sample-chip .role { color: var(--accent); margin-left: 0.35rem; font-size: 0.75rem; }
   </style>
 </head>
 <body>
@@ -36,6 +44,11 @@
     <input id="question-input" data-testid="question-input" type="text" placeholder="Ask a company policy question..." required />
     <button id="submit-btn" data-testid="submit-btn" type="submit">Ask</button>
   </form>
+
+  <section id="samples" data-testid="samples" class="samples">
+    <h2>Try a sample question</h2>
+    <div id="samples-groups"></div>
+  </section>
 
   <div id="error-banner" data-testid="error-banner" class="error-banner" role="alert"></div>
 
@@ -62,6 +75,46 @@
     const citationDrawer = document.getElementById("citation-drawer");
     const drawerTitle = document.getElementById("drawer-title");
     const drawerSnippet = document.getElementById("drawer-snippet");
+
+    fetch("/samples")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((samples) => {
+        if (!samples.length) return;
+        const groups = {};
+        samples.forEach((s) => (groups[s.category] = groups[s.category] || []).push(s));
+        const container = document.getElementById("samples-groups");
+        Object.entries(groups).forEach(([category, items]) => {
+          const group = document.createElement("div");
+          group.className = "sample-group";
+          const title = document.createElement("div");
+          title.className = "sample-group-title";
+          title.textContent = category;
+          const chips = document.createElement("div");
+          chips.className = "sample-chips";
+          items.forEach((s) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "sample-chip";
+            chip.setAttribute("data-testid", "sample-chip");
+            chip.title = s.question;
+            chip.append(s.label);
+            const role = document.createElement("span");
+            role.className = "role";
+            role.textContent = s.role;
+            chip.appendChild(role);
+            chip.addEventListener("click", () => {
+              roleSelect.value = s.role;
+              questionInput.value = s.question;
+              form.requestSubmit();
+            });
+            chips.appendChild(chip);
+          });
+          group.append(title, chips);
+          container.appendChild(group);
+        });
+        document.getElementById("samples").style.display = "block";
+      })
+      .catch(() => {});
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();

@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from llm_provider import get_provider
-from documents import Document, SEED_DOCUMENTS
+from documents import Document, SEED_DOCUMENTS, SAMPLE_QUESTIONS
 from rag_core import generate_grounded_answer_with_usage, search_authorized_docs, set_vector_store, set_llm, get_embedding
 
 # ---------------------------------------------------------------------------
@@ -110,6 +110,14 @@ def serve_minimal_ui():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "indexed_docs": len(VECTOR_STORE), "provider": LLM_PROVIDER}
+
+
+@app.get("/samples")
+def sample_questions():
+    return [
+        {"category": cat, "label": label, "role": role, "question": q}
+        for cat, label, role, q, _ in SAMPLE_QUESTIONS
+    ]
 
 
 @app.get("/debug/vector-store")

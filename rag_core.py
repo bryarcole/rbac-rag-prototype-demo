@@ -121,16 +121,21 @@ def _tokens(text: str) -> set:
     return {w.rstrip("s") if len(w) > 3 else w for w in words if len(w) > 2 and w not in _STOPWORDS}
 
 
+MOCK_MIN_COVERAGE = float(os.getenv("MOCK_MIN_COVERAGE", "0.5"))
+
+
 def _keyword_search(query: str, pool: List[Document], top_k: int) -> List[tuple[Document, float]]:
-    """Mock-mode retrieval: rank already-authorized docs by keyword overlap; no overlap means no match."""
+    """Mock-mode retrieval: rank authorized docs by keyword overlap; abstain below MOCK_MIN_COVERAGE of the question's keywords."""
     q = _tokens(query)
     if not q:
         return []
     scored = []
     for doc in pool:
-        hits = len(q & _tokens(doc.content)) + len(q & _tokens(doc.title))
-        if hits:
-            scored.append((doc, min(1.0, hits / (2 * len(q)))))
+        title_tokens, content_tokens = _tokens(doc.title), _tokens(doc.content)
+        if len(q & (title_tokens | content_tokens)) / len(q) < MOCK_MIN_COVERAGE:
+            continue
+        hits = len(q & content_tokens) + len(q & title_tokens)
+        scored.append((doc, min(1.0, hits / (2 * len(q)))))
     scored.sort(key=lambda pair: pair[1], reverse=True)
     return scored[:top_k]
 
