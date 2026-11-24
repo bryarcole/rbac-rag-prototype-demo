@@ -5,11 +5,12 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-import boto3
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+
+from llm_provider import get_provider
 
 # ---------------------------------------------------------------------------
 # 1. CONFIGURATION & LOGGING
@@ -17,29 +18,25 @@ from pydantic import BaseModel, Field
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("rbac-rag")
 
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "bedrock").lower()
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-CHAT_MODEL_ID = os.getenv("BEDROCK_CHAT_MODEL_ID", "us.amazon.nova-2-lite-v1:0")
-EMBED_MODEL_ID = os.getenv("BEDROCK_EMBED_MODEL_ID", "amazon.titan-embed-text-v2:0")
+
+# Initialize the LLM provider
+try:
+    llm = get_provider()
+    logger.info(f"✅ Using LLM provider: {LLM_PROVIDER}")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to initialize LLM provider: {e}. Running in mock mode.")
+    llm = None
+    os.environ["SKIP_INDEXING"] = "1"
 
 # Similarity floor (0.0 to 1.0). Below this score we abstain rather than hallucinate.
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.35"))
-
-# Estimated USD cost per 1M tokens (Amazon Nova 2 Lite defaults; override via env if swapping models)
-INPUT_COST_PER_1M = float(os.getenv("INPUT_COST_PER_1M", "0.30"))
-OUTPUT_COST_PER_1M = float(os.getenv("OUTPUT_COST_PER_1M", "2.50"))
-
-# Auto-detect AWS credentials and fall back to mock mode if unavailable (e.g., Streamlit Cloud)
-try:
-    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
-    # Verify credentials work by checking caller identity
-    sts = boto3.client("sts", region_name=AWS_REGION)
-    sts.get_caller_identity()
-except Exception:
-    # No credentials available - set SKIP_INDEXING for mock mode
-    os.environ["SKIP_INDEXING"] = "1"
-    bedrock = None
-    logger.info("AWS credentials not available. Running in mock mode (SKIP_INDEXING=1)")
-app = FastAPI(title="Permission-Aware Enterprise RAG", version="2.0.0")
+app = FastAPI(
+    title="Permission-Aware Enterprise RAG",
+    description=f"Multi-provider RBAC RAG system (using {LLM_PROVIDER})",
+    version="3.0.0"
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -148,26 +145,14 @@ VECTOR_STORE: List[Document] = []
 # 4. AMAZON BEDROCK HELPERS (EMBEDDINGS & GENERATION)
 # ---------------------------------------------------------------------------
 def get_embedding(text: str) -> List[float]:
-    """Calls Amazon Titan Text Embeddings V2 to return a 1024-dim normalized vector."""
-    if bedrock is None or os.getenv("SKIP_INDEXING") == "1":
+    """Get embedding from configured LLM provider."""
+    if llm is None or os.getenv("SKIP_INDEXING") == "1":
         # Mock embedding for testing
         import hashlib
         hash_val = hashlib.md5(text.encode()).digest()
         return [float(b) / 128.0 for b in hash_val] + [0.0] * (1024 - len(hash_val))
 
-    payload = json.dumps({
-        "inputText": text,
-        "dimensions": 1024,
-        "normalize": True,
-    })
-    response = bedrock.invoke_model(
-        modelId=EMBED_MODEL_ID,
-        body=payload,
-        contentType="application/json",
-        accept="application/json",
-    )
-    body = json.loads(response["body"].read())
-    return body["embedding"]
+    return llm.get_embedding(text)
 
 
 def generate_grounded_answer_with_usage(
@@ -176,7 +161,7 @@ def generate_grounded_answer_with_usage(
     model_id: Optional[str] = None,
 ) -> tuple[str, int, int, float]:
     """
-    Calls Bedrock Converse API with strict grounding instructions.
+    Generate grounded answer using configured LLM provider.
     Returns (answer_text, input_tokens, output_tokens, estimated_cost_usd).
     """
     context_blocks = [
@@ -193,28 +178,15 @@ def generate_grounded_answer_with_usage(
         "Never guess or use outside knowledge."
     )
 
-    user_message = f"Context:\n{context_str}\n\nQuestion: {question}"
-
     # Mock mode: return simple response
-    if bedrock is None or os.getenv("SKIP_INDEXING") == "1":
+    if llm is None or os.getenv("SKIP_INDEXING") == "1":
         answer = "I do not have enough authorized information to answer that question. (Mock mode - documents not indexed)"
         return answer, 0, 0, 0.0
 
-    response = bedrock.converse(
-        modelId=model_id or CHAT_MODEL_ID,
-        system=[{"text": system_prompt}],
-        messages=[{"role": "user", "content": [{"text": user_message}]}],
-        inferenceConfig={"temperature": 0.0, "maxTokens": 400},
-    )
-
-    answer = response["output"]["message"]["content"][0]["text"]
-    usage = response.get("usage", {})
-    input_tokens = int(usage.get("inputTokens", 0))
-    output_tokens = int(usage.get("outputTokens", 0))
-    cost_usd = round(
-        (input_tokens / 1_000_000) * INPUT_COST_PER_1M
-        + (output_tokens / 1_000_000) * OUTPUT_COST_PER_1M,
-        6,
+    answer, input_tokens, output_tokens, cost_usd = llm.generate_answer(
+        question=question,
+        context=context_str,
+        system_prompt=system_prompt,
     )
     return answer, input_tokens, output_tokens, cost_usd
 
