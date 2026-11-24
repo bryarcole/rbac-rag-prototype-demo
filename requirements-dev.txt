@@ -1,0 +1,5 @@
+# Test dependencies for the offline suites. Not needed to run or deploy the app.
+-r requirements.txt
+pytest==8.3.3
+pytest-html==4.1.1
+httpx==0.27.2

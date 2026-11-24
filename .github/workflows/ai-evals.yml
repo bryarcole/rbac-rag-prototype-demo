@@ -3,6 +3,27 @@ on: [push, pull_request]
 
 jobs:
   # -------------------------------------------------------------------------
+  # JOB 0: Offline mock-mode tests (no AWS, no cost). Runs on 3.11 and 3.13
+  # so a dependency that breaks on a newer Python is caught before deploy.
+  # -------------------------------------------------------------------------
+  offline-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -r requirements-dev.txt
+      - name: Run mock-mode scenario and RBAC tests
+        env:
+          SKIP_INDEXING: "1"
+        run: pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py
+
+  # -------------------------------------------------------------------------
   # JOB 1: Pytest + DeepEval Quality Gate (Fails if Faithfulness < 0.85)
   # -------------------------------------------------------------------------
   deepeval-and-unit-tests:
@@ -12,7 +33,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-eval.txt
       - name: Run RBAC Unit Tests & DeepEval RAG Metrics
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

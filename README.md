@@ -161,23 +161,55 @@ Use `--server.headless true` so Streamlit doesn't stop at its first-run email pr
 
 1. Push this repo to GitHub and create a new app with `streamlit_app.py` as the main file.
 2. Under **Advanced settings → Secrets / environment**, set `SKIP_INDEXING = "1"`. Without it the app tries to reach AWS and fails.
-3. Installs are slow because `requirements.txt` includes `deepeval`, `openai` and `google-generativeai`, which mock mode doesn't use.
+3. Cloud installs only `requirements.txt`, which holds runtime dependencies. Test dependencies live in `requirements-dev.txt` and `requirements-eval.txt` so they can't break the deploy (`deepeval` pins a `grpcio` version with no Python 3.13 wheel). The first build is still slow because `openai` and `google-generativeai` are installed even though mock mode doesn't use them.
 
 ### Testing
 
+Run everything from the repo root with the virtualenv active (`source .venv/bin/activate`) and `pip install -r requirements-dev.txt` done. `pytest.ini` puts the repo root on the import path, so no `PYTHONPATH` setup is needed.
+
+| Suite | Needs AWS / LLM keys? | Cost | Command |
+| :--- | :--- | :--- | :--- |
+| Offline mock-mode tests (442 tests) | No | Free | `SKIP_INDEXING=1 pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py` |
+| Playwright mocked UI + API contract (6 tests) | No | Free | see below |
+| DeepEval quality metrics | Yes | Bedrock + judge-model calls | `pytest -v tests/test_rbac_unit.py tests/test_deepeval.py` |
+| Promptfoo red-team & A/B comparison | Yes | Bedrock calls | `npx promptfoo@latest eval` |
+
+**1. Offline mock-mode tests (start here).** Covers all 200 scenarios, RBAC isolation, abstention, and the sample questions. Takes about a second.
+
 ```bash
-# Offline mock-mode tests: 200 scenarios, RBAC isolation, abstention, sample questions
 SKIP_INDEXING=1 pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py
-
-# DeepEval quality metrics (needs deepeval installed and AWS credentials)
-pytest -v tests/test_rbac_unit.py tests/test_deepeval.py
-
-# Promptfoo red-team & A/B comparison
-npx promptfoo@latest eval
-
-# Playwright E2E tests
-cd playwright && npm install && npm run test:mocked
 ```
+
+**2. Playwright (mocked UI + API contract).** The API-contract tests hit a live server, so start the mock-mode API first. If something is already on port 8000, use another port and pass it as `BASE_URL`.
+
+```bash
+# Terminal 1: API in mock mode
+SKIP_INDEXING=1 uvicorn rag_app:app --port 8000
+
+# Terminal 2: one-time setup, then run
+cd playwright
+npm install
+npx playwright install chromium     # one-time browser download (~100 MB)
+npm run test:mocked                 # BASE_URL=http://127.0.0.1:8010 npm run test:mocked for another port
+npm run report                      # open the HTML report
+```
+
+**3. DeepEval** scores faithfulness, relevancy, precision, and recall against the 30-case `eval_dataset.json` using real Bedrock calls. It also needs AWS credentials and `pip install -r requirements-eval.txt` on Python 3.11 or 3.12 (`deepeval` doesn't install on 3.13). Set `DEEPEVAL_LIMIT=5` to run only the first 5 answerable cases while iterating.
+
+**4. Promptfoo** runs the red-team and model A/B config in `promptfooconfig.yaml` and needs the same AWS credentials.
+
+CI (`.github/workflows/ai-evals.yml`) runs the offline mock-mode tests (on Python 3.11 and 3.13), DeepEval, Promptfoo, and the Playwright mocked suite on push and PR.
+
+**Try it by hand:** with the API running in mock mode, send a question as a given role. The role goes in the `X-User-Role` header.
+
+```bash
+curl -s -X POST localhost:8000/query \
+  -H 'content-type: application/json' -H 'x-user-role: hr' \
+  -d '{"question":"What is the base salary band for an L5 Senior Engineer?"}'
+# Repeat with -H 'x-user-role: employee' and the result is insufficient_context.
+```
+
+Prompt-injection blocking (`blocked_injection`) is done by the triage router in `workflow.py`, which the Streamlit UI uses. The raw `/query` endpoint doesn't triage, but it still can't leak restricted documents because RBAC filters before retrieval.
 
 ### Deployment
 

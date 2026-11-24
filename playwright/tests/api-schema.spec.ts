@@ -7,7 +7,7 @@ test.describe('RAG API Contract & Schema Validation', () => {
     const body = await res.json();
     expect(body).toHaveProperty('status', 'ok');
     expect(typeof body.indexed_docs).toBe('number');
-    expect(typeof body.model_id).toBe('string');
+    expect(typeof body.provider).toBe('string');
   });
 
   test('POST /query rejects spoofed/invalid roles with HTTP 403', async ({ request }) => {

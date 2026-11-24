@@ -1,0 +1,4 @@
+# Adds DeepEval, which needs live LLM calls. deepeval 1.5.8 pins grpcio 1.63.2,
+# which has no Python 3.13 wheel, so use Python 3.11 or 3.12 for this one.
+-r requirements-dev.txt
+deepeval==1.5.8

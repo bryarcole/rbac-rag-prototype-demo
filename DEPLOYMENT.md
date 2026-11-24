@@ -21,7 +21,8 @@ Both the **FastAPI backend** and **Streamlit frontend** are now running and read
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
-pip install -r requirements.txt
+pip install -r requirements.txt            # runtime
+# pip install -r requirements-dev.txt   # plus pytest, if you want to run the tests
 ```
 
 ### 2. Launch Backend
