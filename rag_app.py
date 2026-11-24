@@ -216,16 +216,15 @@ def generate_grounded_answer(
 def search_authorized_docs(query: str, user_role: str, top_k: int) -> List[tuple[Document, float]]:
     """
     Filter by `user_role` BEFORE computing vector similarity.
-    Maps 1:1 to PostgreSQL/pgvector:
-        SELECT doc_id, title, content, 1 - (embedding <=> $1) AS score
-        FROM documents
-        WHERE $2 = ANY(allowed_roles)
-        ORDER BY embedding <=> $1
-        LIMIT $3;
+    In mock mode, returns all authorized documents (no similarity threshold).
     """
     authorized_pool = [doc for doc in VECTOR_STORE if user_role in doc.allowed_roles]
     if not authorized_pool:
         return []
+
+    # Mock mode: return all authorized documents for demo
+    if os.getenv("SKIP_INDEXING") == "1":
+        return [(doc, 1.0) for doc in authorized_pool[:top_k]]
 
     query_vec = np.array(get_embedding(query))
 
