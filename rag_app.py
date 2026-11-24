@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from llm_provider import get_provider
 from documents import Document, SEED_DOCUMENTS, SAMPLE_QUESTIONS
-from rag_core import generate_grounded_answer_with_usage, search_authorized_docs, set_vector_store, set_llm, get_embedding
+from rag_core import generate_grounded_answer_with_usage, index_documents, search_authorized_docs, set_vector_store, set_llm, get_embedding
 
 # ---------------------------------------------------------------------------
 # 1. CONFIGURATION & LOGGING
@@ -88,9 +88,7 @@ def index_seed_documents():
     """Embeds the seed documents once when the server boots."""
     logger.info("Indexing %d enterprise documents into vector store...", len(SEED_DOCUMENTS))
     VECTOR_STORE.clear()
-    for doc in SEED_DOCUMENTS:
-        doc.embedding = get_embedding(f"{doc.title}\n{doc.content}")
-        VECTOR_STORE.append(doc)
+    VECTOR_STORE.extend(index_documents(list(SEED_DOCUMENTS)))
 
     # Set the vector store for rag_core module
     set_vector_store(VECTOR_STORE)

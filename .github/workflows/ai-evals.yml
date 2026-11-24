@@ -21,7 +21,7 @@ jobs:
       - name: Run mock-mode scenario and RBAC tests
         env:
           SKIP_INDEXING: "1"
-        run: pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py
+        run: pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py tests/test_embedding_cache.py
 
   # -------------------------------------------------------------------------
   # JOB 1: Pytest + DeepEval Quality Gate (Fails if Faithfulness < 0.85)

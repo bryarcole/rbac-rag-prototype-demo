@@ -1,7 +1,10 @@
+import hashlib
 import logging
 import os
 import re
-from typing import List, Optional
+import threading
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from documents import Document, SEED_DOCUMENTS
@@ -97,15 +100,84 @@ def generate_grounded_answer(
     return answer
 
 
+EMBEDDINGS_DIR = Path(__file__).parent / "embeddings"
+
+
+def _doc_text(doc: Document) -> str:
+    return f"{doc.title}\n{doc.content}"
+
+
+def _text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def embedding_cache_path(provider_name: str) -> Path:
+    return EMBEDDINGS_DIR / f"{provider_name}.npz"
+
+
+def load_embedding_cache(provider_name: str, model: str) -> Dict[str, Tuple[str, np.ndarray]]:
+    """Return {doc_id: (text_hash, vector)} from the precomputed file, or {} if missing or built with another model."""
+    path = embedding_cache_path(provider_name)
+    if not path.exists():
+        return {}
+    with np.load(path) as data:
+        if str(data["model"]) != model:
+            logger.warning("Ignoring %s: built with %s, current model is %s", path.name, data["model"], model)
+            return {}
+        return {
+            str(doc_id): (str(text_hash), vec)
+            for doc_id, text_hash, vec in zip(data["ids"], data["hashes"], data["vectors"])
+        }
+
+
+def save_embedding_cache(provider_name: str, model: str, docs: List[Document]) -> Path:
+    """Write the embeddings already attached to docs so later startups can skip the API calls."""
+    EMBEDDINGS_DIR.mkdir(exist_ok=True)
+    path = embedding_cache_path(provider_name)
+    np.savez_compressed(
+        path,
+        model=model,
+        ids=np.array([d.doc_id for d in docs]),
+        hashes=np.array([_text_hash(_doc_text(d)) for d in docs]),
+        vectors=np.array([d.embedding for d in docs], dtype=np.float32),
+    )
+    return path
+
+
+def index_documents(docs: List[Document]) -> List[Document]:
+    """Attach an embedding to each doc, reusing the precomputed cache for docs whose text hasn't changed."""
+    cache: Dict[str, Tuple[str, np.ndarray]] = {}
+    if os.getenv("SKIP_INDEXING") != "1":
+        llm = _get_llm()
+        cache = load_embedding_cache(os.getenv("LLM_PROVIDER", "bedrock").lower(), llm.embed_model_name)
+
+    reused = 0
+    for doc in docs:
+        text = _doc_text(doc)
+        cached = cache.get(doc.doc_id)
+        if cached and cached[0] == _text_hash(text):
+            doc.embedding = cached[1].tolist()
+            reused += 1
+        else:
+            doc.embedding = get_embedding(text)
+    logger.info("Indexed %d documents (%d from precomputed cache, %d embedded)", len(docs), reused, len(docs) - reused)
+    return docs
+
+
+_init_lock = threading.Lock()
+
+
 def _ensure_initialized():
     """Lazy initialization of vector store on first access."""
-    global _vector_store, _initialized
-    if not _initialized and not _vector_store:
+    global _initialized
+    if _initialized or _vector_store:
+        return
+    with _init_lock:
+        if _initialized or _vector_store:
+            return
         logger.info(f"Lazy initializing vector store with {len(SEED_DOCUMENTS)} documents...")
-        _vector_store.clear()
-        for doc in SEED_DOCUMENTS:
-            doc.embedding = get_embedding(f"{doc.title}\n{doc.content}")
-            _vector_store.append(doc)
+        # Build fully before publishing so a concurrent search never sees a half-built index.
+        _vector_store.extend(index_documents(list(SEED_DOCUMENTS)))
         _initialized = True
         logger.info(f"✅ Vector store initialized: {len(_vector_store)} documents")
 

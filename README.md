@@ -118,6 +118,7 @@ Because `0.20` was too permissive, vector search retrieved `DOC-ALL-01` (PTO Pol
 | `documents.py` | `Document` model, the 250-document knowledge base, 200 `SCENARIOS`, and the 24 `SAMPLE_QUESTIONS` shared by both UIs |
 | `docs_extra_a.py` … `docs_extra_d.py` | The 200 added documents and their scenarios, by department |
 | `rag_core.py` | Retrieval and answer generation with no FastAPI dependency, so Streamlit can import it; lazily builds the vector store and LLM provider |
+| `build_embeddings.py` | Precomputes document embeddings into `embeddings/<provider>.npz` |
 | `rag_app.py` | FastAPI app: `/query`, `/health`, `/samples`, `/debug/vector-store`, and the HTML test UI at `/` |
 | `workflow.py` | Triage → RBAC retrieval → grounded answer → audit record |
 | `streamlit_app.py` | Streamlit UI |
@@ -161,7 +162,16 @@ Use `--server.headless true` so Streamlit doesn't stop at its first-run email pr
 
 Set `LLM_PROVIDER=gemini` and `GOOGLE_API_KEY`. Defaults are `GEMINI_CHAT_MODEL=gemini-3.5-flash-lite` and `GEMINI_EMBED_MODEL=models/gemini-embedding-001`; override them if Google retires a model. `SIMILARITY_THRESHOLD` defaults to `0.70` for Gemini (`0.35` otherwise) because Gemini embeddings score unrelated documents around 0.5-0.67.
 
-On the free tier, startup embeds 252 documents against a 100 requests/minute limit. The provider waits out the rate limit, so the first start takes about 3 minutes.
+Document embeddings are precomputed and committed in `embeddings/<provider>.npz`, so startup makes no embedding API calls and is instant. Only the question itself is embedded at query time. After editing a document or changing the embedding model, rebuild the file and commit it (unchanged documents are reused, so an interrupted run can resume):
+
+```bash
+set -a; source .env; set +a
+LLM_PROVIDER=gemini python build_embeddings.py     # ~3 minutes on the Gemini free tier (100 requests/minute)
+```
+
+If a document has no cached vector, or the cache was built with a different model, only those documents are embedded at startup. `tests/test_embedding_cache.py` fails if the committed cache is out of date.
+
+For Streamlit Community Cloud, set the secrets `LLM_PROVIDER = "gemini"` and `GOOGLE_API_KEY`, and remove `SKIP_INDEXING`.
 
 ### Deploy the mock demo to Streamlit Community Cloud
 
@@ -175,7 +185,7 @@ Run everything from the repo root with the virtualenv active (`source .venv/bin/
 
 | Suite | Needs AWS / LLM keys? | Cost | Command |
 | :--- | :--- | :--- | :--- |
-| Offline mock-mode tests (442 tests) | No | Free | `SKIP_INDEXING=1 pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py` |
+| Offline mock-mode tests (446 tests) | No | Free | `SKIP_INDEXING=1 pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py tests/test_embedding_cache.py` |
 | Playwright mocked UI + API contract (6 tests) | No | Free | see below |
 | DeepEval quality metrics | Yes | Bedrock + judge-model calls | `pytest -v tests/test_rbac_unit.py tests/test_deepeval.py` |
 | Promptfoo red-team & A/B comparison | Yes | Bedrock calls | `npx promptfoo@latest eval` |
@@ -183,7 +193,7 @@ Run everything from the repo root with the virtualenv active (`source .venv/bin/
 **1. Offline mock-mode tests (start here).** Covers all 200 scenarios, RBAC isolation, abstention, and the sample questions. Takes about a second.
 
 ```bash
-SKIP_INDEXING=1 pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py
+SKIP_INDEXING=1 pytest -v tests/test_mock_scenarios.py tests/test_rbac_unit.py tests/test_embedding_cache.py
 ```
 
 **2. Playwright (mocked UI + API contract).** The API-contract tests hit a live server, so start the mock-mode API first. If something is already on port 8000, use another port and pass it as `BASE_URL`.

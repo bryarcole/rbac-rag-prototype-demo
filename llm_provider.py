@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 class LLMProvider(ABC):
     """Base class for LLM providers."""
 
+    @property
+    def embed_model_name(self) -> str:
+        """Embedding model id, used to tell whether cached document embeddings are still valid."""
+        return getattr(self, "embed_model_id", None) or getattr(self, "embed_model", "unknown")
+
     @abstractmethod
     def get_embedding(self, text: str) -> List[float]:
         """Convert text to embedding vector."""
