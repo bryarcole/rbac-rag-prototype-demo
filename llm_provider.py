@@ -5,6 +5,8 @@ Supports: AWS Bedrock, Google Gemini, OpenAI
 import os
 import json
 import logging
+import re
+import time
 from typing import List, Tuple, Optional
 from abc import ABC, abstractmethod
 
@@ -86,6 +88,22 @@ class BedrockProvider(LLMProvider):
         return answer, input_tokens, output_tokens, cost_usd
 
 
+def _retry_on_rate_limit(call, attempts: int = 6):
+    """Retry a Gemini call that hit a per-minute quota, sleeping for the delay the API suggests."""
+    from google.api_core.exceptions import ResourceExhausted
+
+    for attempt in range(attempts):
+        try:
+            return call()
+        except ResourceExhausted as exc:
+            if attempt == attempts - 1:
+                raise
+            match = re.search(r"retry in ([\d.]+)s", str(exc))
+            delay = float(match.group(1)) + 1 if match else 30
+            logger.warning("Gemini rate limit hit, retrying in %.0fs", delay)
+            time.sleep(delay)
+
+
 class GeminiProvider(LLMProvider):
     """Google Gemini provider."""
 
@@ -97,8 +115,8 @@ class GeminiProvider(LLMProvider):
             raise ValueError("GOOGLE_API_KEY environment variable not set")
 
         genai.configure(api_key=api_key)
-        self.embed_model = "models/text-embedding-004"
-        self.chat_model = genai.GenerativeModel("gemini-2.0-flash")
+        self.embed_model = os.getenv("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
+        self.chat_model_id = os.getenv("GEMINI_CHAT_MODEL", "gemini-3.5-flash-lite")
         self.input_cost_per_1m = float(os.getenv("GEMINI_INPUT_COST_PER_1M", "0.025"))
         self.output_cost_per_1m = float(os.getenv("GEMINI_OUTPUT_COST_PER_1M", "0.10"))
 
@@ -108,7 +126,7 @@ class GeminiProvider(LLMProvider):
         """Get embedding from Gemini."""
         import google.generativeai as genai
 
-        result = genai.embed_content(model=self.embed_model, content=text)
+        result = _retry_on_rate_limit(lambda: genai.embed_content(model=self.embed_model, content=text))
         return result["embedding"]
 
     def generate_answer(
@@ -118,7 +136,7 @@ class GeminiProvider(LLMProvider):
         import google.generativeai as genai
 
         model = genai.GenerativeModel(
-            "gemini-2.0-flash",
+            self.chat_model_id,
             system_instruction=system_prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.0,
@@ -127,7 +145,7 @@ class GeminiProvider(LLMProvider):
         )
 
         user_message = f"Context:\n{context}\n\nQuestion: {question}"
-        response = model.generate_content(user_message)
+        response = _retry_on_rate_limit(lambda: model.generate_content(user_message))
         answer = response.text
 
         # Gemini doesn't expose token counts in free tier, estimate based on text length

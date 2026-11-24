@@ -157,6 +157,12 @@ SKIP_INDEXING=1 streamlit run streamlit_app.py --server.headless true --server.p
 
 Use `--server.headless true` so Streamlit doesn't stop at its first-run email prompt when started in the background.
 
+### Live mode with Gemini
+
+Set `LLM_PROVIDER=gemini` and `GOOGLE_API_KEY`. Defaults are `GEMINI_CHAT_MODEL=gemini-3.5-flash-lite` and `GEMINI_EMBED_MODEL=models/gemini-embedding-001`; override them if Google retires a model. `SIMILARITY_THRESHOLD` defaults to `0.70` for Gemini (`0.35` otherwise) because Gemini embeddings score unrelated documents around 0.5-0.67.
+
+On the free tier, startup embeds 252 documents against a 100 requests/minute limit. The provider waits out the rate limit, so the first start takes about 3 minutes.
+
 ### Deploy the mock demo to Streamlit Community Cloud
 
 1. Push this repo to GitHub and create a new app with `streamlit_app.py` as the main file.

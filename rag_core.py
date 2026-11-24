@@ -9,7 +9,9 @@ from llm_provider import get_provider
 
 logger = logging.getLogger("rbac-rag")
 
-SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.35"))
+# Gemini embeddings score unrelated documents around 0.5-0.67, so it needs a higher bar than Titan.
+_DEFAULT_THRESHOLD = "0.70" if os.getenv("LLM_PROVIDER", "").lower() == "gemini" else "0.35"
+SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", _DEFAULT_THRESHOLD))
 
 # Global reference to vector store
 _vector_store: List[Document] = []
