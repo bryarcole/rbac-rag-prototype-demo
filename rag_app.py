@@ -256,7 +256,7 @@ def serve_minimal_ui():
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "indexed_docs": len(VECTOR_STORE), "model_id": CHAT_MODEL_ID}
+    return {"status": "ok", "indexed_docs": len(VECTOR_STORE), "provider": LLM_PROVIDER}
 
 
 @app.post("/query", response_model=QueryResponse)
