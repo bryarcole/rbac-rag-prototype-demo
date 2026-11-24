@@ -275,6 +275,23 @@ def health_check():
     return {"status": "ok", "indexed_docs": len(VECTOR_STORE), "provider": LLM_PROVIDER}
 
 
+@app.get("/debug/vector-store")
+def debug_vector_store():
+    """Debug endpoint to check what's in VECTOR_STORE"""
+    return {
+        "total_docs": len(VECTOR_STORE),
+        "docs": [
+            {
+                "doc_id": doc.doc_id,
+                "title": doc.title,
+                "has_embedding": doc.embedding is not None,
+                "allowed_roles": doc.allowed_roles,
+            }
+            for doc in VECTOR_STORE
+        ]
+    }
+
+
 @app.post("/query", response_model=QueryResponse)
 def query_knowledge_base(
     req: QueryRequest,
