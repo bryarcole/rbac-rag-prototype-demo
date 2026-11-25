@@ -1,3 +1,15 @@
+# ROLE GROUPS used as the last element of each document tuple below. A document tagged with a group
+# can be read ONLY by the roles listed in it. Note that "executive" appears in every group: it is
+# the most privileged role, so it can read everything.
+#
+#   ALL  = everyone                 ENG  = engineering + executive
+#   HR   = hr + executive           EXEC = executive only
+#   MGMT = engineering + hr + executive (NOT plain employees)
+#
+# DOCS tuple shape:      (doc_id, title, content, allowed_roles)
+# SCENARIOS tuple shape: (question, a role allowed to read the doc, the doc_id that should be found)
+# Each scenario is a test case: that role must retrieve that document, and roles outside the
+# document's group must never retrieve it (tests/test_mock_scenarios.py checks both).
 ALL = ["employee", "engineering", "hr", "executive"]
 ENG = ["engineering", "executive"]
 HR = ["hr", "executive"]

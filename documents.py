@@ -3,6 +3,23 @@ from pydantic import BaseModel
 
 
 class Document(BaseModel):
+    """
+    One knowledge-base document.
+
+    `allowed_roles` is the ACCESS-CONTROL METADATA that powers the whole project: retrieval keeps a
+    document only if the caller's role is in this list (rag_core.search_authorized_docs).
+    `embedding` starts as None and is filled in at startup (or loaded from the precomputed cache).
+
+    +- AWS EXAM [CLF-C02 / DVA-C02] -----------------------------------------------------------
+    | Q: How do you attach per-document access rules in a Bedrock Knowledge Base?
+    | A: As METADATA on each document (a sidecar <file>.metadata.json for files in S3, for
+    |    example {"metadataAttributes": {"allowed_roles": ["hr", "executive"]}}), then filter on
+    |    it when you call Retrieve / RetrieveAndGenerate.
+    | WHY: Authorization data travels WITH the document, so the filter is enforced by the
+    |    retrieval layer, not by hoping the model behaves. It is the same idea as attributes on a
+    |    DynamoDB item or tags used in IAM attribute-based access control (ABAC).
+    +---------------------------------------------------------------------------------------
+    """
     doc_id: str
     title: str
     content: str
@@ -533,6 +550,9 @@ SEED_DOCUMENTS: List[Document] = [
     ),
 ]
 
+# The first 52 documents are written out above. The other 200 live in docs_extra_a..d.py as plain
+# tuples (to keep this file readable) and are converted into Document objects here.
+# Final result: SEED_DOCUMENTS has 252 documents and is what the whole app indexes and searches.
 from docs_extra_a import DOCS as _DOCS_A, SCENARIOS as _SCEN_A
 from docs_extra_b import DOCS as _DOCS_B, SCENARIOS as _SCEN_B
 from docs_extra_c import DOCS as _DOCS_C, SCENARIOS as _SCEN_C
